@@ -1,0 +1,85 @@
+{
+  "project": {
+    "name": "Semantic Kernel AI Agent",
+    "type": "console",
+    "framework": "semantic-kernel"
+  },
+  "formatting": {
+    "useTabs": false,
+    "tabSize": 4,
+    "maxLineLength": 120,
+    "bracketSpacing": true
+  },
+  "conventions": {
+    "namingRules": {
+      "classes": "PascalCase",
+      "methods": "PascalCase",
+      "interfaces": "IPascalCase",
+      "variables": "camelCase",
+      "constants": "UPPER_CASE",
+      "plugins": "PascalCasePlugin"
+    },
+    "fileNaming": {
+      "sourceFiles": "PascalCase.cs",
+      "testFiles": "PascalCase.Tests.cs",
+      "pluginFiles": "PascalCasePlugin.cs"
+    }
+  },
+  "documentation": {
+    "requireXmlComments": true,
+    "requireReadme": true,
+    "requireChangelog": true
+  },
+  "testing": {
+    "requireUnitTests": true,
+    "coverageThreshold": 80,
+    "testNamingPattern": "Should_ExpectedBehavior_When_StateUnderTest"
+  },
+  "semanticKernel": {
+    "pluginRules": {
+      "requireDescription": true,
+      "requireKernelFunction": true,
+      "requireErrorHandling": true,
+      "requireLogging": true
+    },
+    "modelSettings": {
+      "requireFallback": true,
+      "requireRateLimiting": true,
+      "requireTokenTracking": true
+    }
+  },
+  "security": {
+    "requireInputValidation": true,
+    "requireOutputSanitization": true,
+    "requireSecureConfig": true,
+    "requireApiKeyRotation": true
+  },
+  "performance": {
+    "maxMethodLength": 50,
+    "maxClassLength": 500,
+    "requireAsyncAwait": true,
+    "requireCancellationToken": true
+  },
+  "plugins": {
+    "required": [
+      "NewsPlugin",
+      "ArchivePlugin"
+    ],
+    "optional": [
+      "WeatherPlugin",
+      "CalendarPlugin",
+      "EmailPlugin"
+    ]
+  },
+  "ai": {
+    "models": {
+      "primary": "gpt-4",
+      "fallback": "gpt-3.5-turbo"
+    },
+    "features": {
+      "requireStreamingSupport": true,
+      "requireContextManagement": true,
+      "requireMemoryServices": true
+    }
+  }
+}

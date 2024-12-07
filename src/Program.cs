@@ -1,81 +1,156 @@
-﻿using Microsoft.SemanticKernel; // Core Semantic Kernel functionality
-using Microsoft.SemanticKernel.ChatCompletion; // For chat completion services
-using Microsoft.SemanticKernel.Connectors.OpenAI; // For OpenAI service connectors
-using SKDemo; // Namespace for plugins (e.g., NewsPlugin)
-using Microsoft.Extensions.Configuration; // For configuration management
+﻿﻿using Microsoft.SemanticKernel;
+using Microsoft.SemanticKernel.ChatCompletion;
+using Microsoft.SemanticKernel.Connectors.OpenAI;
+using Microsoft.Extensions.Configuration;
+using System.Text.Json;
+using SKDemo;
+using SKDemo.Helpers;
 
 class Program
 {
     static async Task Main(string[] args)
     {
-        // Load configuration from appsettings.json
         IConfiguration config = new ConfigurationBuilder()
-            .SetBasePath(Directory.GetCurrentDirectory()) // Set the base directory
-            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true) // Load appsettings.json
+            .SetBasePath(Directory.GetCurrentDirectory())
+            .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
             .Build();
 
-        // Retrieve configuration values from the "AzureOpenAI" section
-        string deploymentName = config["AzureOpenAI:DeploymentName"] ?? throw new ArgumentNullException("DeploymentName", "⚠️ DeploymentName is missing in appsettings.json.");
-        string endpoint = config["AzureOpenAI:Endpoint"] ?? throw new ArgumentNullException("Endpoint", "⚠️ Endpoint is missing in appsettings.json.");
-        string apiKey = config["AzureOpenAI:ApiKey"] ?? throw new ArgumentNullException("ApiKey", "⚠️ ApiKey is missing in appsettings.json.");
+        string deploymentName = config["AzureOpenAI:DeploymentName"] 
+            ?? throw new ArgumentNullException("DeploymentName", "Missing deployment name in configuration");
+        string endpoint = config["AzureOpenAI:Endpoint"] 
+            ?? throw new ArgumentNullException("Endpoint", "Missing endpoint in configuration");
+        string apiKey = config["AzureOpenAI:ApiKey"] 
+            ?? throw new ArgumentNullException("ApiKey", "Missing API key in configuration");
 
-        // Create the kernel builder
         var builder = Kernel.CreateBuilder();
-
-        // Add Azure OpenAI service to the builder
         builder.AddAzureOpenAIChatCompletion(deploymentName, endpoint, apiKey);
-
-        // Add plugins (e.g., NewsPlugin)
         builder.Plugins.AddFromType<NewsPlugin>();
-
-        // Build the kernel
+        builder.Plugins.AddFromType<ArchivePlugin>();
         Kernel kernel = builder.Build();
 
-        // Retrieve the chat completion service
-        var chatService = kernel.GetRequiredService<IChatCompletionService>();
+        var chatHistory = new ChatHistory();
+        var newsPlugin = new NewsPlugin();
+        var archivePlugin = new ArchivePlugin();
 
-        // Initialize chat history for maintaining context
-        ChatHistory chatMessages = new ChatHistory();
+        Console.WriteLine("Welcome to the AI News Assistant! Type 'exit' to quit.");
+        Console.WriteLine("Available commands:");
+        Console.WriteLine("- news <category>: Get latest news for a category (e.g., 'news Technology')");
+        Console.WriteLine("- get <category> news: Alternative way to get news");
+        Console.WriteLine("- save: Save the last fetched news to archive");
+        Console.WriteLine("- chat: Have a conversation about the news");
+        Console.WriteLine("- help: Show this help message");
+        Console.WriteLine();
 
-        // Main interaction loop
+        // Store last fetched news content
+        string? lastFetchedNews = null;
+        string? lastFetchedCategory = null;
+
         while (true)
         {
-            // Prompt the user for input
-            Console.Write("Prompt: ");
-            string? userInput = Console.ReadLine();
+            Console.Write("You: ");
+            var input = Console.ReadLine()?.Trim();
 
-            // Validate user input
-            if (string.IsNullOrWhiteSpace(userInput))
+            if (string.IsNullOrEmpty(input) || input.ToLower() == "exit")
+                break;
+
+            try
             {
-                Console.WriteLine("⚠️ Please provide a valid input.");
-                continue; // Skip iteration if input is invalid
-            }
-
-            // Add user input to the chat history
-            chatMessages.AddUserMessage(userInput);
-
-            // Retrieve streaming chat message contents asynchronously
-            var completion = chatService.GetStreamingChatMessageContentsAsync(
-                chatMessages,
-                executionSettings: new OpenAIPromptExecutionSettings
+                if (input.ToLower() == "help")
                 {
-                    ToolCallBehavior = ToolCallBehavior.AutoInvokeKernelFunctions // Automatically invoke kernel functions
-                },
-                kernel: kernel
-            );
+                    Console.WriteLine("Available commands:");
+                    Console.WriteLine("- news <category>: Get latest news for a category");
+                    Console.WriteLine("- get <category> news: Alternative way to get news");
+                    Console.WriteLine("- save: Save the last fetched news to archive");
+                    Console.WriteLine("- chat: Have a conversation about the news");
+                    Console.WriteLine("- help: Show this help message");
+                    Console.WriteLine("- exit: Quit the application");
+                    continue;
+                }
 
-            string fullMessage = ""; // To store the assistant's full response
+                if (input.ToLower() == "save")
+                {
+                    if (lastFetchedNews == null || lastFetchedCategory == null)
+                    {
+                        Console.WriteLine("\n❌ No news content to save. Please fetch news first.");
+                        continue;
+                    }
 
-            // Stream and display the assistant's response
-            await foreach (var content in completion)
+                    string fileName = $"{lastFetchedCategory.ToLower()}_news_{DateTime.UtcNow:yyyy-MM-dd}";
+                    var archiveResult = await archivePlugin.ArchiveContentAsync(lastFetchedNews, fileName);
+                    Console.WriteLine(archiveResult);
+                    continue;
+                }
+
+                // Check for both "news <category>" and "get <category> news" patterns
+                bool isNewsCommand = input.ToLower().StartsWith("news ");
+                bool isGetNewsCommand = input.ToLower().StartsWith("get ") && input.ToLower().EndsWith(" news");
+                
+                if (isNewsCommand || isGetNewsCommand)
+                {
+                    string category;
+                    if (isNewsCommand)
+                    {
+                        category = input.Substring(5).Trim();
+                    }
+                    else
+                    {
+                        category = input.ToLower()
+                            .Replace("get ", "")
+                            .Replace(" news", "")
+                            .Trim();
+                    }
+
+                    Console.WriteLine($"\nFetching {category} news...");
+                    var newsContent = await newsPlugin.GetNews(kernel, category);
+                    
+                    // Store the fetched news for potential saving later
+                    lastFetchedNews = newsContent;
+                    lastFetchedCategory = category;
+
+                    // Parse and display news in a readable format
+                    using var jsonDoc = JsonDocument.Parse(newsContent);
+                    var articles = jsonDoc.RootElement.GetProperty("articles");
+                    Console.WriteLine($"\nLatest {category} News:");
+                    foreach (var article in articles.EnumerateArray())
+                    {
+                        Console.WriteLine($"\n📰 {article.GetProperty("title").GetString()}");
+                        Console.WriteLine($"🔗 {article.GetProperty("link").GetString()}");
+                        Console.WriteLine($"📅 {article.GetProperty("publishDate").GetDateTime():g}");
+                    }
+                    Console.WriteLine("\nType 'save' to archive these news articles.");
+                    continue;
+                }
+
+                // Handle chat about the news
+                chatHistory.AddUserMessage(input);
+                var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
+                var chatResponse = await chatCompletionService.GetChatMessageContentAsync(
+                    chatHistory: chatHistory,
+                    executionSettings: new OpenAIPromptExecutionSettings 
+                    { 
+                        MaxTokens = 2000,
+                        Temperature = 0.7
+                    }
+                );
+
+                if (chatResponse?.Content is not null)
+                {
+                    chatHistory.AddAssistantMessage(chatResponse.Content);
+                    Console.WriteLine($"\nAssistant: {chatResponse.Content}");
+                }
+                else
+                {
+                    Console.WriteLine("\n❌ Error: No response received from the AI.");
+                }
+            }
+            catch (Exception ex)
             {
-                Console.Write(content.Content); // Print the response content
-                fullMessage += content.Content; // Accumulate the full response
+                Console.WriteLine($"\n❌ Error: {ex.Message}");
             }
 
-            // Add the assistant's response to the chat history
-            chatMessages.AddAssistantMessage(fullMessage);
-            Console.WriteLine(); // Add a newline for better readability
+            Console.WriteLine(); // Add a blank line for readability
         }
+
+        Console.WriteLine("\nGoodbye! 👋");
     }
 }

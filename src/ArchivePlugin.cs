@@ -1,52 +1,64 @@
-﻿// File Name: ArchivePlugin.cs
-// Description: A Semantic Kernel plugin to save user-provided content to a file.
-// Purpose: Archives user-provided content by writing it to a text file in a designated folder.
+﻿using Microsoft.SemanticKernel;
+using System;
+using System.ComponentModel;
+using System.IO;
+using System.Threading.Tasks;
+using System.Text;
+using System.Text.Json;
 
-using Microsoft.SemanticKernel;  // For KernelFunction and Semantic Kernel integration
-using System;                    // For basic system utilities
-using System.ComponentModel;     // For metadata annotations
-using System.IO;                 // For file I/O operations
-using System.Threading.Tasks;    // For async programming
-
-namespace SKDemo // Namespace for Semantic Kernel demo plugins
+namespace SKDemo
 {
     /// <summary>
-    /// ArchivePlugin saves user-provided content to a text file.
+    /// ArchivePlugin saves structured JSON content to a file.
     /// </summary>
     public class ArchivePlugin
     {
-        private readonly string _archiveDirectory;
-
-        public ArchivePlugin()
-        {
-            _archiveDirectory = Path.Combine(Directory.GetCurrentDirectory(), "archives");
-            Directory.CreateDirectory(_archiveDirectory); // Ensure directory exists
-        }
-
-        /// <summary>
-        /// Saves the provided content to a file.
-        /// </summary>
-        /// <param name="content">The content to save.</param>
-        /// <param name="fileName">Optional file name for the saved content.</param>
-        /// <returns>A message indicating the result of the operation.</returns>
-        [KernelFunction("archive_data")]
-        [Description("Saves content to a file in the archive folder.")]
+        [KernelFunction("archive_content")]
+        [Description("Archives content to a file.")]
         public async Task<string> ArchiveContentAsync(
-            [Description("The content to save.")] string content,
-            [Description("Optional filename (without extension).")] string? fileName = null)
+            [Description("The content to archive")] string content,
+            [Description("The filename to use")] string fileName)
         {
+            if (string.IsNullOrEmpty(content))
+            {
+                return "❌ Error: Content is empty";
+            }
+
             try
             {
-                fileName ??= $"archive_{DateTime.Now:yyyyMMdd_HHmmss}";
-                fileName = string.Join("_", fileName.Split(Path.GetInvalidFileNameChars()));
-                string filePath = Path.Combine(_archiveDirectory, $"{fileName}.txt");
-
-                await File.WriteAllTextAsync(filePath, content);
-                return $"✅ Content successfully archived to: {filePath}";
+                // Ensure absolute path to archives directory
+                var baseDir = Path.Combine(Directory.GetCurrentDirectory(), "archives");
+                Directory.CreateDirectory(baseDir);
+                
+                var filePath = Path.Combine(baseDir, $"{fileName}.json");
+                
+                // Ensure the content is valid JSON before saving
+                using (JsonDocument.Parse(content)) { }
+                
+                // Write file with UTF8 encoding without BOM
+                await File.WriteAllTextAsync(
+                    filePath, 
+                    content, 
+                    new UTF8Encoding(encoderShouldEmitUTF8Identifier: false)
+                );
+                
+                // Verify file was created
+                if (File.Exists(filePath))
+                {
+                    return $"✅ Content archived successfully to {filePath}";
+                }
+                else
+                {
+                    return "❌ Error: File was not created successfully";
+                }
+            }
+            catch (JsonException ex)
+            {
+                return $"❌ Error: Invalid JSON content - {ex.Message}";
             }
             catch (Exception ex)
             {
-                return $"❌ Error saving content: {ex.Message}";
+                return $"❌ Error archiving content: {ex.Message}";
             }
         }
     }
