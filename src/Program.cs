@@ -32,14 +32,24 @@ class Program
         var newsPlugin = new NewsPlugin();
         var archivePlugin = new ArchivePlugin();
 
-        Console.WriteLine("Welcome to the AI News Assistant! Type 'exit' to quit.");
-        Console.WriteLine("Available commands:");
-        Console.WriteLine("- news <category>: Get latest news for a category (e.g., 'news Technology')");
-        Console.WriteLine("- get <category> news: Alternative way to get news");
-        Console.WriteLine("- save: Save the last fetched news to archive");
-        Console.WriteLine("- chat: Have a conversation about the news");
-        Console.WriteLine("- help: Show this help message");
-        Console.WriteLine();
+        Console.Clear();
+        Console.ForegroundColor = ConsoleColor.Cyan;
+        Console.WriteLine("╔══════════════════════════════════════╗");
+        Console.WriteLine("║      🤖 AI News Assistant v1.0       ║");
+        Console.WriteLine("╚══════════════════════════════════════╝");
+        Console.ResetColor();
+        Console.WriteLine("\nAvailable commands:");
+        Console.ForegroundColor = ConsoleColor.Green;
+        Console.WriteLine("1. news <category>    - Get latest news (e.g., 'news Technology')");
+        Console.WriteLine("2. get <category> news- Alternative way to get news");
+        Console.WriteLine("3. save              - Save last fetched news to archive");
+        Console.WriteLine("4. chat              - Have a conversation about the news");
+        Console.WriteLine("5. help              - Show this help message");
+        Console.WriteLine("6. exit              - Quit the application");
+        Console.WriteLine("7. clear             - Clear the console");
+        Console.ResetColor();
+        Console.WriteLine("\nSupported categories: Technology, Business, World, Science, Health");
+        Console.WriteLine("──────────────────────────────────────────");
 
         // Store last fetched news content
         string? lastFetchedNews = null;
@@ -47,23 +57,43 @@ class Program
 
         while (true)
         {
-            Console.Write("You: ");
+            Console.ForegroundColor = ConsoleColor.Yellow;
+            Console.Write("\nYou: ");
+            Console.ResetColor();
             var input = Console.ReadLine()?.Trim();
 
-            if (string.IsNullOrEmpty(input) || input.ToLower() == "exit")
+            if (string.IsNullOrEmpty(input))
+                continue;
+
+            if (input.ToLower() == "exit")
+            {
+                Console.ForegroundColor = ConsoleColor.Cyan;
+                Console.WriteLine("\nGoodbye! 👋");
+                Console.ResetColor();
                 break;
+            }
 
             try
             {
+                if (input.ToLower() == "clear")
+                {
+                    Console.Clear();
+                    continue;
+                }
+
                 if (input.ToLower() == "help")
                 {
-                    Console.WriteLine("Available commands:");
-                    Console.WriteLine("- news <category>: Get latest news for a category");
-                    Console.WriteLine("- get <category> news: Alternative way to get news");
-                    Console.WriteLine("- save: Save the last fetched news to archive");
-                    Console.WriteLine("- chat: Have a conversation about the news");
-                    Console.WriteLine("- help: Show this help message");
-                    Console.WriteLine("- exit: Quit the application");
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\nAvailable commands:");
+                    Console.WriteLine("1. news <category>    - Get latest news (e.g., 'news Technology')");
+                    Console.WriteLine("2. get <category> news- Alternative way to get news");
+                    Console.WriteLine("3. save              - Save last fetched news to archive");
+                    Console.WriteLine("4. chat              - Have a conversation about the news");
+                    Console.WriteLine("5. help              - Show this help message");
+                    Console.WriteLine("6. exit              - Quit the application");
+                    Console.WriteLine("7. clear             - Clear the console");
+                    Console.ResetColor();
+                    Console.WriteLine("\nSupported categories: Technology, Business, World, Science, Health");
                     continue;
                 }
 
@@ -71,13 +101,25 @@ class Program
                 {
                     if (lastFetchedNews == null || lastFetchedCategory == null)
                     {
+                        Console.ForegroundColor = ConsoleColor.Red;
                         Console.WriteLine("\n❌ No news content to save. Please fetch news first.");
+                        Console.ResetColor();
                         continue;
                     }
 
                     string fileName = $"{lastFetchedCategory.ToLower()}_news_{DateTime.UtcNow:yyyy-MM-dd}";
                     var archiveResult = await archivePlugin.ArchiveContentAsync(lastFetchedNews, fileName);
-                    Console.WriteLine(archiveResult);
+                    
+                    if (archiveResult.StartsWith("✅"))
+                    {
+                        Console.ForegroundColor = ConsoleColor.Green;
+                    }
+                    else
+                    {
+                        Console.ForegroundColor = ConsoleColor.Red;
+                    }
+                    Console.WriteLine($"\n{archiveResult}");
+                    Console.ResetColor();
                     continue;
                 }
 
@@ -100,29 +142,43 @@ class Program
                             .Trim();
                     }
 
-                    Console.WriteLine($"\nFetching {category} news...");
+                    Console.WriteLine($"\n📡 Fetching {category} news...");
                     var newsContent = await newsPlugin.GetNews(kernel, category);
                     
-                    // Store the fetched news for potential saving later
                     lastFetchedNews = newsContent;
                     lastFetchedCategory = category;
 
-                    // Parse and display news in a readable format
                     using var jsonDoc = JsonDocument.Parse(newsContent);
                     var articles = jsonDoc.RootElement.GetProperty("articles");
-                    Console.WriteLine($"\nLatest {category} News:");
+                    
+                    Console.ForegroundColor = ConsoleColor.Cyan;
+                    Console.WriteLine($"\n📰 Latest {category} News:");
+                    Console.WriteLine("──────────────────────────────────────────");
+                    Console.ResetColor();
+                    
+                    int articleCount = 1;
                     foreach (var article in articles.EnumerateArray())
                     {
-                        Console.WriteLine($"\n📰 {article.GetProperty("title").GetString()}");
-                        Console.WriteLine($"🔗 {article.GetProperty("link").GetString()}");
-                        Console.WriteLine($"📅 {article.GetProperty("publishDate").GetDateTime():g}");
+                        Console.ForegroundColor = ConsoleColor.White;
+                        Console.WriteLine($"\n{articleCount}. {article.GetProperty("title").GetString()}");
+                        Console.ForegroundColor = ConsoleColor.Blue;
+                        Console.WriteLine($"   🔗 {article.GetProperty("link").GetString()}");
+                        Console.ForegroundColor = ConsoleColor.Gray;
+                        Console.WriteLine($"   📅 {article.GetProperty("publishDate").GetDateTime():g}");
+                        Console.ResetColor();
+                        articleCount++;
                     }
-                    Console.WriteLine("\nType 'save' to archive these news articles.");
+                    
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine("\n💾 Type 'save' to archive these news articles.");
+                    Console.ResetColor();
                     continue;
                 }
 
                 // Handle chat about the news
                 chatHistory.AddUserMessage(input);
+                Console.WriteLine("\n🤔 Thinking...");
+                
                 var chatCompletionService = kernel.GetRequiredService<IChatCompletionService>();
                 var chatResponse = await chatCompletionService.GetChatMessageContentAsync(
                     chatHistory: chatHistory,
@@ -136,21 +192,23 @@ class Program
                 if (chatResponse?.Content is not null)
                 {
                     chatHistory.AddAssistantMessage(chatResponse.Content);
-                    Console.WriteLine($"\nAssistant: {chatResponse.Content}");
+                    Console.ForegroundColor = ConsoleColor.Green;
+                    Console.WriteLine($"\n🤖 Assistant: {chatResponse.Content}");
+                    Console.ResetColor();
                 }
                 else
                 {
+                    Console.ForegroundColor = ConsoleColor.Red;
                     Console.WriteLine("\n❌ Error: No response received from the AI.");
+                    Console.ResetColor();
                 }
             }
             catch (Exception ex)
             {
+                Console.ForegroundColor = ConsoleColor.Red;
                 Console.WriteLine($"\n❌ Error: {ex.Message}");
+                Console.ResetColor();
             }
-
-            Console.WriteLine(); // Add a blank line for readability
         }
-
-        Console.WriteLine("\nGoodbye! 👋");
     }
 }
